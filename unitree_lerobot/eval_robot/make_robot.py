@@ -77,19 +77,19 @@ def setup_image_client(args: argparse.Namespace) -> dict[str, Any]:
             "head_camera_type": "opencv",
             "head_camera_image_shape": [480, 640],  # Head camera resolution
             "head_camera_id_numbers": [0],
-            "wrist_camera_type": "opencv",
-            "wrist_camera_image_shape": [480, 640],  # Wrist camera resolution
-            "wrist_camera_id_numbers": [2, 4],
+            # "wrist_camera_type": "opencv",
+            # "wrist_camera_image_shape": [480, 640],  # Wrist camera resolution
+            # "wrist_camera_id_numbers": [2, 4],
         }
     else:
         img_config = {
             "fps": 30,
             "head_camera_type": "opencv",
-            "head_camera_image_shape": [480, 1280],  # Head camera resolution
+            "head_camera_image_shape": [480, 640],  # Head camera resolution
             "head_camera_id_numbers": [0],
-            "wrist_camera_type": "opencv",
-            "wrist_camera_image_shape": [480, 640],  # Wrist camera resolution
-            "wrist_camera_id_numbers": [2, 4],
+            # "wrist_camera_type": "opencv",
+            # "wrist_camera_image_shape": [480, 640],  # Wrist camera resolution
+            # "wrist_camera_id_numbers": [2, 4],
         }
 
     ASPECT_RATIO_THRESHOLD = 2.0  # If the aspect ratio exceeds this value, it is considered binocular
@@ -113,6 +113,9 @@ def setup_image_client(args: argparse.Namespace) -> dict[str, Any]:
 
     tv_img_shm = shared_memory.SharedMemory(create=True, size=np.prod(tv_img_shape) * np.uint8().itemsize)
     tv_img_array = np.ndarray(tv_img_shape, dtype=np.uint8, buffer=tv_img_shm.buf)
+    wrist_img_shape = None
+    wrist_img_array = None
+    wrist_img_shm = None
 
     if WRIST and getattr(args, "sim", False):
         wrist_img_shape = (img_config["wrist_camera_image_shape"][0], img_config["wrist_camera_image_shape"][1] * 2, 3)
@@ -151,7 +154,7 @@ def setup_image_client(args: argparse.Namespace) -> dict[str, Any]:
         "wrist_img_shape": wrist_img_shape,
         "is_binocular": BINOCULAR,
         "has_wrist_cam": has_wrist_cam,
-        "shm_resources": [tv_img_shm, wrist_img_shm],
+        "shm_resources": [tv_img_shm, wrist_img_shm] if WRIST else [tv_img_shm],
     }
 
 

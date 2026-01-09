@@ -1,0 +1,93 @@
+export HF_HUB_DISABLE_XET=1
+
+python unitree_lerobot/utils/sort_and_rename_folders.py \
+        --data_dir datasets/xr_teleop/apple_box
+
+HF_LEROBOT_HOME=./lerobot_data python unitree_lerobot/utils/convert_unitree_json_to_lerobot.py \
+    --raw-dir datasets/xr_teleop \
+    --repo-id deepansh-methdai/apple_box \
+    --robot_type Unitree_G1_Dex3_Single_Cam \
+    --push_to_hub
+
+python unitree_lerobot/utils/convert_unitree_json_to_lerobot.py \
+    --raw-dir datasets/xr_teleop \
+    --repo-id deepansh-methdai/apple_box \
+    --robot_type Unitree_G1_Dex3_Single_Cam \
+    --push_to_hub
+
+python src/lerobot/datasets/v30/augment_dataset_quantile_stats.py \
+    --repo-id=deepansh-methdai/apple_box
+
+hf upload --folder-path /mnt/drive2/.cache/huggingface/lerobot/deepansh-methdai/apple_box deepansh-methdai/apple_box
+huggingface-cli upload deepansh-methdai/apple_box /mnt/drive2/.cache/huggingface/lerobot/deepansh-methdai/apple_box .
+
+### TRAINING
+
+rm -rf /home/deepansh/drive2/humanoid_ws/src/lerobot_dir/unitree_IL_lerobot/unitree_lerobot/lerobot/outputs && \
+HF_LEROBOT_HOME=/home/deepansh/drive2/humanoid_ws/src/lerobot_dir/unitree_IL_lerobot/lerobot_data \
+ python src/lerobot/scripts/lerobot_train.py \
+    --dataset.repo_id=deepansh-methdai/apple_box \
+    --policy.type=pi05 \
+    --output_dir=./outputs/pi05_training \
+    --job_name=pi05_training \
+    --policy.repo_id=deepansh-methdai/pi05_test \
+    --policy.pretrained_path=lerobot/pi05_base \
+    --policy.compile_model=true \
+    --policy.gradient_checkpointing=true \
+    --wandb.enable=true \
+    --policy.dtype=bfloat16 \
+    --steps=7000 \
+    --policy.device=cuda \
+    --batch_size=32 \
+    --save_freq=1000 \
+    --log_freq=50
+
+### OPEN LOOP EVAL
+
+python unitree_lerobot/eval_robot/eval_g1_dataset.py  \
+    --policy.path=/home/deepansh/drive2/humanoid_ws/src/lerobot_dir/unitree_IL_lerobot/unitree_lerobot/lerobot/outputs/pi05_training/checkpoints/002000/pretrained_model \
+    --repo_id=deepansh-methdai/apple_box \
+    --root="" \
+    --episodes=0 \
+    --frequency=30 \
+    --arm="G1_29" \
+    --ee="dex3" \
+    --visualization=false \
+    --send_real_robot=true
+
+
+### REPLAY
+
+python unitree_lerobot/eval_robot/replay_robot.py \
+    --repo_id=deepansh-methdai/apple_box \
+    --root="" \
+    --episodes=0 \
+    --frequency=30 \
+    --arm="G1_29" \
+    --ee="dex3" \
+    --send_real_robot=true \
+    --visualization=false
+
+
+### INFERENCE
+
+python unitree_lerobot/eval_robot/eval_g1.py  \
+    --policy.path=/home/deepansh/drive2/humanoid_ws/src/lerobot_dir/unitree_IL_lerobot/unitree_lerobot/lerobot/outputs/pi05_training/checkpoints/002000/pretrained_model \
+    --repo_id=deepansh-methdai/apple_box \
+    --root="" \
+    --episodes=0 \
+    --frequency=30 \
+    --arm="G1_29" \
+    --ee="dex3" \
+    --rename_map='{"observation.images.cam_left_high": "observation.images.camera"}'
+
+python unitree_lerobot/eval_robot/eval_g1.py  \
+    --policy.path=/home/deepansh/drive2/humanoid_ws/src/lerobot_dir/unitree_IL_lerobot/unitree_lerobot/lerobot/outputs/pi05_training/checkpoints/007000/pretrained_model \
+    --repo_id=deepansh-methdai/apple_box \
+    --root="" \
+    --episodes=0 \
+    --frequency=30 \
+    --arm="G1_29" \
+    --ee="dex3" \
+    --rename_map='{"observation.images.cam_left_high": "observation.images.camera"}' \
+    --send_real_robot=true

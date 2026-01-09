@@ -99,6 +99,8 @@ def eval_policy(
         idx = 0
         print(f"user_input: {user_input}")
         full_state = None
+        prev_action_np = None  # For action smoothing
+        smoothing_alpha = 0.4  # 0.0 = use previous action, 1.0 = use new action only
         if user_input.lower() == "s":
             # "The initial positions of the robot's arm and fingers take the initial positions during data recording."
             logger_mp.info("Initializing robot to starting pose...")
@@ -136,6 +138,12 @@ def eval_policy(
                     robot_type=None,
                 )
                 action_np = action.cpu().numpy()
+
+                # # Apply exponential smoothing to reduce jerky motion
+                # if prev_action_np is not None:
+                #     action_np = smoothing_alpha * action_np + (1 - smoothing_alpha) * prev_action_np
+                # prev_action_np = action_np.copy()
+
                 # 3. Execute Action
                 arm_action = action_np[:arm_dof]
                 tau = arm_ik.solve_tau(arm_action)

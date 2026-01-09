@@ -175,6 +175,47 @@ G1_DEX3_CONFIG = RobotConfig(
     json_action_data_name=["left_arm.qpos", "right_arm.qpos", "left_ee.qpos", "right_ee.qpos"],
 )
 
+G1_DEX3_SINGLE_CAM_CONFIG = RobotConfig(
+    motors=[
+        "kLeftShoulderPitch",
+        "kLeftShoulderRoll",
+        "kLeftShoulderYaw",
+        "kLeftElbow",
+        "kLeftWristRoll",
+        "kLeftWristPitch",
+        "kLeftWristYaw",
+        "kRightShoulderPitch",
+        "kRightShoulderRoll",
+        "kRightShoulderYaw",
+        "kRightElbow",
+        "kRightWristRoll",
+        "kRightWristPitch",
+        "kRightWristYaw",
+        "kLeftHandThumb0",
+        "kLeftHandThumb1",
+        "kLeftHandThumb2",
+        "kLeftHandMiddle0",
+        "kLeftHandMiddle1",
+        "kLeftHandIndex0",
+        "kLeftHandIndex1",
+        "kRightHandThumb0",
+        "kRightHandThumb1",
+        "kRightHandThumb2",
+        "kRightHandIndex0",
+        "kRightHandIndex1",
+        "kRightHandMiddle0",
+        "kRightHandMiddle1",
+    ],
+    cameras=[
+        "camera",
+    ],
+    camera_to_image_key={
+        "color_0": "camera",
+    },
+    json_state_data_name=["left_arm.qpos", "right_arm.qpos", "left_ee.qpos", "right_ee.qpos"],
+    json_action_data_name=["left_arm.qpos", "right_arm.qpos", "left_ee.qpos", "right_ee.qpos"],
+)
+
 
 G1_BRAINCO_CONFIG = RobotConfig(
     motors=[
@@ -479,4 +520,5 @@ ROBOT_CONFIGS = {
     "Unitree_G1_MoveibleLift_Dex1_NoUseWaist": MOVEIBLE_LIFT_G1_DEX1_NOUSEWAIST_CONFIG,
     "Unitree_G1_Lift_Dex1_UseWaist": LIFT_G1_DEX1_USEWAIST_CONFIG,
     "Unitree_G1_Lift_Dex1_NoUseWaist": LIFT_G1_DEX1_NOUSEWAIST_CONFIG,
+    "Unitree_G1_Dex3_Single_Cam": G1_DEX3_SINGLE_CAM_CONFIG,
 }

@@ -10,3 +10,8 @@ cam_right_wrist.jpg
 cam_left_wrist.jpg
 data/
 ./data
+
+outputs*
+data*
+lerobot_data
+
