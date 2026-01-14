@@ -257,6 +257,10 @@ def process_images_and_observations(
         "observation.images.cam_left_wrist": torch.from_numpy(left_wrist_cam) if has_wrist_cam else None,
         "observation.images.cam_right_wrist": torch.from_numpy(right_wrist_cam) if has_wrist_cam else None,
     }
+
+    # # convert image from bgr to rgb 
+    # observation = {k: (v[..., ::-1] if v is not None else None) for k, v in observation.items()}
+
     current_arm_q = arm_ctrl.get_current_dual_arm_q()
 
     return observation, current_arm_q

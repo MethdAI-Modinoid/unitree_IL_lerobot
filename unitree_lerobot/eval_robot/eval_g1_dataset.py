@@ -112,6 +112,9 @@ def eval_policy(
                 robot_type=None,
             )
             action_np = action.cpu().numpy()
+            # print shape
+            print(f"Predicted Action Shape: {action_np.shape}")
+            print(f"Predicted Action: {action_np}")
 
             ground_truth_actions.append(step["action"].numpy())
             predicted_actions.append(action_np)
