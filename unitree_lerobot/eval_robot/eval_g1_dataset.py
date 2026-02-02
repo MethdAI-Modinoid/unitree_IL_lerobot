@@ -151,6 +151,9 @@ def eval_policy(
         # Get the number of timesteps and action dimensions
         n_timesteps, n_dims = ground_truth_actions.shape
 
+        # Get joint names from dataset metadata
+        action_names = dataset.meta.features["action"]["names"][0] if "names" in dataset.meta.features["action"] else [f"Dim {i + 1}" for i in range(n_dims)]
+
         # Create a figure with subplots for each action dimension
         fig, axes = plt.subplots(n_dims, 1, figsize=(12, 4 * n_dims), sharex=True)
         fig.suptitle("Ground Truth vs Predicted Actions")
@@ -161,7 +164,7 @@ def eval_policy(
 
             ax.plot(ground_truth_actions[:, i], label="Ground Truth", color="blue")
             ax.plot(predicted_actions[:, i], label="Predicted", color="red", linestyle="--")
-            ax.set_ylabel(f"Dim {i + 1}")
+            ax.set_ylabel(action_names[i])
             ax.legend()
 
         # Set common x-label

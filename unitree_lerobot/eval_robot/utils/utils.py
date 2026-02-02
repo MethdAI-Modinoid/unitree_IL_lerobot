@@ -133,6 +133,7 @@ class EvalRealConfig:
     use_dataset: bool = False
 
     rename_map: dict[str, str] = field(default_factory=dict)
+    custom_task: str = ""
 
     def __post_init__(self):
         # HACK: We parse again the cli args here to get the pretrained path if there was one.

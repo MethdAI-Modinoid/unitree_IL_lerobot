@@ -95,6 +95,9 @@ def eval_policy(
         step = dataset[from_idx]
         init_arm_pose = step["observation.state"][:arm_dof].cpu().numpy()
 
+        task_command = cfg.custom_task if cfg.custom_task else step.get("task", "")
+        logger_mp.info(f"Using task command: {task_command!r}")
+
         user_input = input("Enter 's' to initialize the robot and start the evaluation: ")
         idx = 0
         print(f"user_input: {user_input}")
@@ -133,16 +136,16 @@ def eval_policy(
                     preprocessor,
                     postprocessor,
                     policy.config.use_amp,
-                    step["task"],
+                    task_command,
                     use_dataset=cfg.use_dataset,
                     robot_type=None,
                 )
                 action_np = action.cpu().numpy()
 
-                # # Apply exponential smoothing to reduce jerky motion
-                # if prev_action_np is not None:
-                #     action_np = smoothing_alpha * action_np + (1 - smoothing_alpha) * prev_action_np
-                # prev_action_np = action_np.copy()
+                # Apply exponential smoothing to reduce jerky motion
+                if prev_action_np is not None:
+                    action_np = smoothing_alpha * action_np + (1 - smoothing_alpha) * prev_action_np
+                prev_action_np = action_np.copy()
 
                 # 3. Execute Action
                 arm_action = action_np[:arm_dof]

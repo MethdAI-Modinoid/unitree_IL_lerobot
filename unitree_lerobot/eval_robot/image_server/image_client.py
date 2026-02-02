@@ -163,6 +163,9 @@ class ImageClient:
                 if current_image is None:
                     print("[Image Client] Failed to decode image.")
                     continue
+                
+                # # Convert BGR to RGB
+                # current_image = cv2.cvtColor(current_image, cv2.COLOR_BGR2RGB)
 
                 if self.tv_enable_shm:
                     img_h, img_w = current_image.shape[:2]

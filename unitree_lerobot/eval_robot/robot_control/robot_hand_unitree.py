@@ -24,6 +24,7 @@ Dex3_Num_Motors = 7
 kTopicDex3LeftCommand = "rt/dex3/left/cmd"
 kTopicDex3RightCommand = "rt/dex3/right/cmd"
 kTopicDex3LeftState = "rt/dex3/left/state"
+# kTopicDex3LeftState = "rt/dex3/left/state_dummy"
 kTopicDex3RightState = "rt/dex3/right/state"
 
 
@@ -82,7 +83,11 @@ class Dex3_1_Controller:
         self.subscribe_state_thread.start()
 
         while True:
-            if any(self.left_hand_state_array) and any(self.right_hand_state_array):
+            # print(self.left_hand_state_array[:], self.right_hand_state_array[:])
+            # if any(self.left_hand_state_array) and any(self.right_hand_state_array):
+            #     break
+            print(self.left_hand_state_array[:], self.right_hand_state_array[:])
+            if any(self.right_hand_state_array):
                 break
             time.sleep(0.01)
             logger_mp.warning("[Dex3_1_Controller] Waiting to subscribe dds...")
@@ -105,18 +110,34 @@ class Dex3_1_Controller:
 
         logger_mp.info("Initialize Dex3_1_Controller OK!\n")
 
+    # def _subscribe_hand_state(self):
+    #     while True:
+    #         left_hand_msg = self.LeftHandState_subscriber.Read()
+    #         right_hand_msg = self.RightHandState_subscriber.Read()
+    #         if left_hand_msg is not None and right_hand_msg is not None:
+    #             # Update left hand state
+    #             for idx, id in enumerate(Dex3_1_Left_JointIndex):
+    #                 self.left_hand_state_array[idx] = left_hand_msg.motor_state[id].q
+    #                 # print(self.left_hand_state_array[:].shape)
+    #             # Update right hand state
+    #             for idx, id in enumerate(Dex3_1_Right_JointIndex):
+    #                 self.right_hand_state_array[idx] = right_hand_msg.motor_state[id].q
+    #                 # print(self.right_hand_state_array[:].shape)
+    #         time.sleep(0.002)
+
     def _subscribe_hand_state(self):
         while True:
-            left_hand_msg = self.LeftHandState_subscriber.Read()
             right_hand_msg = self.RightHandState_subscriber.Read()
-            if left_hand_msg is not None and right_hand_msg is not None:
+            if right_hand_msg is not None:
                 # Update left hand state
                 for idx, id in enumerate(Dex3_1_Left_JointIndex):
-                    self.left_hand_state_array[idx] = left_hand_msg.motor_state[id].q
+                    self.left_hand_state_array[idx] = float(0.1)
                 # Update right hand state
                 for idx, id in enumerate(Dex3_1_Right_JointIndex):
                     self.right_hand_state_array[idx] = right_hand_msg.motor_state[id].q
+                    # print(self.right_hand_state_array[:].shape)
             time.sleep(0.002)
+
 
     class _RIS_Mode:
         def __init__(self, id=0, status=0x01, timeout=0):

@@ -73,23 +73,31 @@ def setup_image_client(args: argparse.Namespace) -> dict[str, Any]:
     # image client: img_config should be the same as the configuration in image_server.py (of Robot's development computing unit)
     if getattr(args, "sim", False):
         img_config = {
-            "fps": 30,
-            "head_camera_type": "opencv",
-            "head_camera_image_shape": [480, 640],  # Head camera resolution
-            "head_camera_id_numbers": [0],
-            # "wrist_camera_type": "opencv",
-            # "wrist_camera_image_shape": [480, 640],  # Wrist camera resolution
-            # "wrist_camera_id_numbers": [2, 4],
+        'fps': 30,
+        
+        # ---- HEAD CAMERA (RealSense) ----
+        'head_camera_type': 'realsense',
+        'head_camera_image_shape': [480, 640],
+        'head_camera_id_numbers': ['344522071502'],  # Your RealSense serial number
+        
+        # ---- WRIST CAMERAS (2 USB webcams) ----
+        'wrist_camera_type': 'opencv',
+        'wrist_camera_image_shape': [480, 640],
+        'wrist_camera_id_numbers': ["/dev/video4", "/dev/video6"],  # /dev/video0 and /dev/video2
         }
     else:
         img_config = {
-            "fps": 30,
-            "head_camera_type": "opencv",
-            "head_camera_image_shape": [480, 640],  # Head camera resolution
-            "head_camera_id_numbers": [0],
-            # "wrist_camera_type": "opencv",
-            # "wrist_camera_image_shape": [480, 640],  # Wrist camera resolution
-            # "wrist_camera_id_numbers": [2, 4],
+        'fps': 30,
+        
+        # ---- HEAD CAMERA (RealSense) ----
+        'head_camera_type': 'realsense',
+        'head_camera_image_shape': [480, 640],
+        'head_camera_id_numbers': ['344522071502'],  # Your RealSense serial number
+        
+        # ---- WRIST CAMERAS (2 USB webcams) ----
+        'wrist_camera_type': 'opencv',
+        'wrist_camera_image_shape': [480, 640],
+        'wrist_camera_id_numbers': ["/dev/video4", "/dev/video6"],  # /dev/video0 and /dev/video2
         }
 
     ASPECT_RATIO_THRESHOLD = 2.0  # If the aspect ratio exceeds this value, it is considered binocular
