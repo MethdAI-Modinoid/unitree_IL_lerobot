@@ -19,6 +19,7 @@ from unitree_lerobot.eval_robot.utils.utils import cleanup_resources, EvalRealCo
 
 from unitree_lerobot.eval_robot.utils.rerun_visualizer import RerunLogger, visualization_data
 from unitree_lerobot.eval_robot.utils.utils import to_list, to_scalar
+from unitree_lerobot.eval_robot.utils.gripper_converter import GripperConverter, detect_dataset_mode
 
 import logging_mp
 
@@ -58,10 +59,25 @@ def replay_main(cfg: EvalRealConfig):
     dataset = LeRobotDataset(repo_id=cfg.repo_id, root=cfg.root, episodes=[cfg.episodes])
     actions = dataset.hf_dataset.select_columns("action")
 
+    # --- Setup Gripper Converter ---
+    # Detect if dataset uses gripper (16D/8D) or full hand (28D/14D) representation
+    dataset_info = detect_dataset_mode(dataset.meta)
+    gripper_converter = GripperConverter(ee_type=cfg.ee) if cfg.ee else None
+    is_single_arm = dataset_info["arm_type"] == "single"
+    logger_mp.info(f"Dataset mode: {dataset_info['mode']} ({dataset_info['state_dim']}D), arm_type: {dataset_info['arm_type']}")
+
     # init pose
     from_idx = dataset.meta.episodes["dataset_from_index"][0]
     step = dataset[from_idx]
-    init_left_arm_pose = step["observation.state"][:14].cpu().numpy()
+    
+    # For single arm, dataset has 7 arm joints (right arm only)
+    # But IK expects 14D, so we need to pad with zeros for left arm
+    if is_single_arm:
+        right_arm_init = step["observation.state"][:7].cpu().numpy()
+        left_arm_init = np.zeros(7, dtype=np.float32)  # Default pose for left arm
+        init_left_arm_pose = np.concatenate([left_arm_init, right_arm_init])
+    else:
+        init_left_arm_pose = step["observation.state"][:14].cpu().numpy()
 
     user_input = input("Please enter the start signal (enter 's' to start the subsequent program):")
     if user_input.lower() == "s":
@@ -77,34 +93,78 @@ def replay_main(cfg: EvalRealConfig):
             action_np = actions[idx]["action"].numpy()
 
             # exec action
-            arm_action = action_np[:arm_dof]
+            # For single arm, pad left arm with zeros to get 14D for IK
+            if is_single_arm:
+                right_arm_action = action_np[:7]
+                left_arm_action = np.zeros(7, dtype=np.float32)
+                arm_action = np.concatenate([left_arm_action, right_arm_action])
+            else:
+                arm_action = action_np[:arm_dof]
+                
             tau = arm_ik.solve_tau(arm_action)
             arm_ctrl.ctrl_dual_arm(arm_action, tau)
             logger_mp.info(f"arm_action {arm_action}, tau {tau}")
 
-            if cfg.ee:
-                ee_action_start_idx = arm_dof
-                left_ee_action = action_np[ee_action_start_idx : ee_action_start_idx + ee_dof]
-                right_ee_action = action_np[ee_action_start_idx + ee_dof : ee_action_start_idx + 2 * ee_dof]
-                logger_mp.info(f"EE Action: left {left_ee_action}, right {right_ee_action}")
+            if cfg.ee and gripper_converter:
+                # Use gripper converter to handle gripper/full and single/dual arm
+                # For single arm, use arm_dof=7 so converter correctly detects 8D action
+                converter_arm_dof = 7 if is_single_arm else arm_dof
+                ee_actions = gripper_converter.get_ee_actions(action_np, converter_arm_dof)
+                
+                if is_single_arm:
+                    # Single arm: only one end-effector (right arm/hand)
+                    ee_action = ee_actions[0]
+                    logger_mp.info(f"EE Action: {ee_action}")
 
-                with ee_shared_mem["lock"]:
-                    full_state = np.array(ee_shared_mem["state"][:])
-                    left_ee_state = full_state[:ee_dof]
-                    right_ee_state = full_state[ee_dof:]
+                    with ee_shared_mem["lock"]:
+                        full_state = np.array(ee_shared_mem["state"][:])
+                        left_ee_state = full_state[:ee_dof]
+                        right_ee_state = np.array([])
+                    
+                    # For single arm, the EE goes to the RIGHT hand
+                    if isinstance(ee_shared_mem["right"], SynchronizedArray):
+                        ee_shared_mem["right"][:] = to_list(ee_action)
+                    elif hasattr(ee_shared_mem["right"], "value"):
+                        ee_shared_mem["right"].value = to_scalar(ee_action)
+                else:
+                    # Dual arm: two end-effectors
+                    left_ee_action, right_ee_action = ee_actions
+                    logger_mp.info(f"EE Action: left {left_ee_action}, right {right_ee_action}")
 
-                if isinstance(ee_shared_mem["left"], SynchronizedArray):
-                    ee_shared_mem["left"][:] = to_list(left_ee_action)
-                    ee_shared_mem["right"][:] = to_list(right_ee_action)
-                elif hasattr(ee_shared_mem["left"], "value") and hasattr(ee_shared_mem["right"], "value"):
-                    ee_shared_mem["left"].value = to_scalar(left_ee_action)
-                    ee_shared_mem["right"].value = to_scalar(right_ee_action)
+                    with ee_shared_mem["lock"]:
+                        full_state = np.array(ee_shared_mem["state"][:])
+                        left_ee_state = full_state[:ee_dof]
+                        right_ee_state = full_state[ee_dof:]
+
+                    if isinstance(ee_shared_mem["left"], SynchronizedArray):
+                        ee_shared_mem["left"][:] = to_list(left_ee_action)
+                        ee_shared_mem["right"][:] = to_list(right_ee_action)
+                    elif hasattr(ee_shared_mem["left"], "value") and hasattr(ee_shared_mem["right"], "value"):
+                        ee_shared_mem["left"].value = to_scalar(left_ee_action)
+                        ee_shared_mem["right"].value = to_scalar(right_ee_action)
 
             if cfg.visualization:
                 observation, current_arm_q = process_images_and_observations(
                     tv_img_array, wrist_img_array, tv_img_shape, wrist_img_shape, is_binocular, has_wrist_cam, arm_ctrl
                 )
-                state = np.concatenate((current_arm_q, left_ee_state, right_ee_state))
+                
+                # Build state matching dataset format for visualization
+                if is_single_arm:
+                    right_arm_q = current_arm_q[7:14]
+                    if gripper_converter and dataset_info["mode"] == "gripper":
+                        from unitree_lerobot.eval_robot.utils.gripper_converter import estimate_hand_openness
+                        gripper_value = estimate_hand_openness(right_ee_state, hand="right")
+                        state = np.concatenate([right_arm_q, np.array([gripper_value], dtype=np.float32)])
+                    else:
+                        state = np.concatenate([right_arm_q, right_ee_state])
+                else:
+                    if gripper_converter and dataset_info["mode"] == "gripper":
+                        from unitree_lerobot.eval_robot.utils.gripper_converter import estimate_hand_openness
+                        left_gripper = estimate_hand_openness(left_ee_state, hand="left")
+                        right_gripper = estimate_hand_openness(right_ee_state, hand="right")
+                        state = np.concatenate([current_arm_q, np.array([left_gripper, right_gripper], dtype=np.float32)])
+                    else:
+                        state = np.concatenate((current_arm_q, left_ee_state, right_ee_state))
 
                 visualization_data(idx, observation, state, action_np, rerun_logger)
 
