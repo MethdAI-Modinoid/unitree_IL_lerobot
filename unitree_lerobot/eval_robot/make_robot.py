@@ -178,7 +178,14 @@ def setup_robot_interface(args: argparse.Namespace) -> dict[str, Any]:
     arm_spec = ARM_CONFIG[args.arm]
     arm_ik = arm_spec["ik_solver"]()
     is_sim = getattr(args, "sim", False)
-    arm_ctrl = arm_spec["controller"](motion_mode=args.motion, simulation_mode=is_sim)
+    if args.arm == "G1_29":
+        arm_ctrl = arm_spec["controller"](
+            motion_mode=args.motion,
+            simulation_mode=is_sim,
+            single=getattr(args, "single", False),
+        )
+    else:
+        arm_ctrl = arm_spec["controller"](motion_mode=args.motion, simulation_mode=is_sim)
 
     # ---------- End Effector (optional) ----------
     ee_ctrl, ee_shared_mem, ee_dof = None, {}, 0

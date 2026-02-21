@@ -1,0 +1,44 @@
+# Caches
+__pycache__/
+*.pyc
+*.pyo
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Build artifacts
+*.egg-info/
+build/
+dist/
+
+# Large data — mounted as volumes at runtime
+lerobot_data/
+open_loop_eval_results/
+datasets/
+experiment_logs/
+
+# Training outputs — mounted as volumes at runtime
+unitree_lerobot/lerobot/outputs_*/
+unitree_lerobot/lerobot/wandb/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker (avoid recursive copy)
+Dockerfile
+build.sh
+docker_run.sh
+.dockerignore

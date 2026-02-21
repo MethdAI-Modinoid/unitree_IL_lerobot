@@ -1,4 +1,5 @@
-```py
+```sh
+rm -rf /home/deepansh/drive2/humanoid_ws/src/lerobot_dir/unitree_IL_lerobot_synced/unitree_lerobot/lerobot/outputs_act && \
 cd /home/deepansh/drive2/humanoid_ws/src/lerobot_dir/unitree_IL_lerobot_synced/unitree_lerobot/lerobot && \
 HF_LEROBOT_HOME=/home/deepansh/drive2/humanoid_ws/src/lerobot_dir/unitree_IL_lerobot_synced/lerobot_data \
 python -s src/lerobot/scripts/lerobot_train.py \
@@ -8,12 +9,8 @@ python -s src/lerobot/scripts/lerobot_train.py \
     --job_name=act_single_arm_dual_cam \
     --policy.device=cuda \
     --wandb.enable=true \
-    --policy.repo_id=deepansh-methdai/act_policy
-    --policy.compile_model=true \
-    --policy.compile_mode=reduce-overhead \
-    --policy.gradient_checkpointing=true \
+    --policy.repo_id=deepansh-methdai/act_policy \
     --wandb.enable=true \
-    --policy.dtype=bfloat16 \
     --steps=5000 \
     --policy.device=cuda \
     --batch_size=32 \
@@ -21,4 +18,14 @@ python -s src/lerobot/scripts/lerobot_train.py \
     --log_freq=50 \
     --wandb.notes="Single Arm Dual Camera, ACT, default config testing"
 
+```
+
+```sh
+HF_LEROBOT_HOME=/home/deepansh/drive2/humanoid_ws/src/lerobot_dir/unitree_IL_lerobot_synced/lerobot_data \
+python -s src/lerobot/scripts/lerobot_train.py \
+  --resume=true \
+  --config_path=/home/deepansh/drive2/humanoid_ws/src/lerobot_dir/unitree_IL_lerobot_synced/unitree_lerobot/lerobot/outputs_pi05_single_camera_single_gripper/checkpoints/007500/pretrained_model/train_config.json \
+  --steps=20000 \
+  --batch_size=64
+  --save_freq=2500
 ```

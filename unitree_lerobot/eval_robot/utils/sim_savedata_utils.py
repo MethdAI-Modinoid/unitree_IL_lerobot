@@ -187,6 +187,7 @@ class EvalRealConfig:
     visualization: bool = False
     send_real_robot: bool = False
     use_dataset: bool = False
+    single: bool = False
     save_data: bool = False
     task_dir: str = "./data"
     max_episodes: int = 1200

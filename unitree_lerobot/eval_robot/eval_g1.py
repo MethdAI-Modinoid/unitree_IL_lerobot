@@ -49,6 +49,9 @@ logging_mp.basic_config(level=logging_mp.INFO)
 logger_mp = logging_mp.get_logger(__name__)
 
 
+LEFT_ARM_Q = [0.0881, 0.0373, 0.5046, 1.1915, 0.0040, 0.2412, -0.0439]
+
+
 def eval_policy(
     cfg: EvalRealConfig,
     dataset: LeRobotDataset,
@@ -106,7 +109,7 @@ def eval_policy(
         # But IK expects 14D, so we need to pad with zeros for left arm
         if is_single_arm:
             right_arm_init = step["observation.state"][:7].cpu().numpy()
-            left_arm_init = np.zeros(7, dtype=np.float32)  # Default pose for left arm
+            left_arm_init = np.array(LEFT_ARM_Q, dtype=np.float32) if cfg.single else np.zeros(7, dtype=np.float32)
             init_arm_pose = np.concatenate([left_arm_init, right_arm_init])
         else:
             init_arm_pose = step["observation.state"][:arm_dof].cpu().numpy()
@@ -195,8 +198,7 @@ def eval_policy(
                 # For single arm, pad left arm with zeros to get 14D for IK
                 if is_single_arm:
                     right_arm_action = action_np[:7]
-                    LEFT_ARM_Q = [0.0881, 0.0373, 0.5046, 1.1915, 0.0040, 0.2412, -0.0439]
-                    left_arm_action = np.array(LEFT_ARM_Q, dtype=np.float32)
+                    left_arm_action = np.array(LEFT_ARM_Q, dtype=np.float32) if cfg.single else np.zeros(7, dtype=np.float32)
                     arm_action = np.concatenate([left_arm_action, right_arm_action])
                 else:
                     arm_action = action_np[:arm_dof]
