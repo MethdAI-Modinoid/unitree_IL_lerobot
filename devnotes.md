@@ -179,7 +179,7 @@ python -s unitree_lerobot/eval_robot/eval_g1.py  \
     --arm="G1_29" \
     --ee="dex3" \
     --send_real_robot=true \
-    <!-- --custom_task="pick up the cube and place it in the brown box" -->
+    --custom_task="pick up the cube and place it in the brown box"
 
 
 ### SLATE

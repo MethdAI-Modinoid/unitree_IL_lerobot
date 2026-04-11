@@ -105,7 +105,7 @@ RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
 # ==============================================================================
 RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
     pip install \
-        "transformers==4.53.3" \
+        "transformers @ git+https://github.com/huggingface/transformers.git@fix/lerobot_openpi" \
         "scipy==1.14.1" \
         "accelerate==1.12.0" \
         "diffusers==0.35.2" \
