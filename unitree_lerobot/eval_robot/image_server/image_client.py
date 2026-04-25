@@ -43,12 +43,14 @@ class ImageClient:
             self.tv_image_shm = shared_memory.SharedMemory(name=tv_img_shm_name)
             self.tv_img_array = np.ndarray(tv_img_shape, dtype=np.uint8, buffer=self.tv_image_shm.buf)
             self.tv_enable_shm = True
+        self._tv_shape_warned = False
 
         self.wrist_enable_shm = False
         if self.wrist_img_shape is not None and wrist_img_shm_name is not None:
             self.wrist_image_shm = shared_memory.SharedMemory(name=wrist_img_shm_name)
             self.wrist_img_array = np.ndarray(wrist_img_shape, dtype=np.uint8, buffer=self.wrist_image_shm.buf)
             self.wrist_enable_shm = True
+        self._wrist_shape_warned = False
 
         # Performance evaluation parameters
         self._enable_performance_eval = Unit_Test
@@ -161,12 +163,34 @@ class ImageClient:
                 if current_image is None:
                     print("[Image Client] Failed to decode image.")
                     continue
+                
+                # # Convert BGR to RGB
+                # current_image = cv2.cvtColor(current_image, cv2.COLOR_BGR2RGB)
 
                 if self.tv_enable_shm:
-                    np.copyto(self.tv_img_array, np.array(current_image[:, : self.tv_img_shape[1]]))
+                    img_h, img_w = current_image.shape[:2]
+                    target_h, target_w = self.tv_img_shape[:2]
+                    if (img_h != target_h or img_w != target_w) and not self._tv_shape_warned:
+                        print(
+                            f"[Image Client] Incoming head image shape {img_h}x{img_w} differs from expected {target_h}x{target_w}; cropping/padding to fit."
+                        )
+                        self._tv_shape_warned = True
+                    h, w = min(img_h, target_h), min(img_w, target_w)
+                    self.tv_img_array.fill(0)
+                    self.tv_img_array[:h, :w] = current_image[:h, :w]
 
                 if self.wrist_enable_shm:
-                    np.copyto(self.wrist_img_array, np.array(current_image[:, -self.wrist_img_shape[1] :]))
+                    img_h, img_w = current_image.shape[:2]
+                    target_h, target_w = self.wrist_img_shape[:2]
+                    if (img_h != target_h or img_w < target_w) and not self._wrist_shape_warned:
+                        print(
+                            f"[Image Client] Incoming wrist image shape {img_h}x{img_w} differs from expected {target_h}x{target_w}; cropping/padding to fit."
+                        )
+                        self._wrist_shape_warned = True
+                    h, w = min(img_h, target_h), min(img_w, target_w)
+                    start_col = max(0, img_w - target_w)
+                    self.wrist_img_array.fill(0)
+                    self.wrist_img_array[:h, :w] = current_image[:h, start_col : start_col + w]
 
                 if self._image_show:
                     height, width = current_image.shape[:2]

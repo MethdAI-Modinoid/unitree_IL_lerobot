@@ -24,6 +24,8 @@ G1_23_Num_Motors = 35
 H1_2_Num_Motors = 35
 H1_Num_Motors = 20
 
+LEFT_ARM_Q = np.array([0.0881, 0.0373, 0.5046, 1.1915, 0.0040, 0.2412, -0.0439], dtype=np.float32)
+
 
 class MotorState:
     def __init__(self):
@@ -66,9 +68,12 @@ class DataBuffer:
 
 
 class G1_29_ArmController:
-    def __init__(self, motion_mode=False, simulation_mode=False):
+    def __init__(self, motion_mode=False, simulation_mode=False, single: bool = False, left_arm_q: np.ndarray | list | None = None):
         logger_mp.info("Initialize G1_29_ArmController...")
-        self.q_target = np.zeros(14)
+        self.q_target = np.zeros(14, dtype=np.float32)
+        if single:
+            left_values = LEFT_ARM_Q if left_arm_q is None else np.array(left_arm_q, dtype=np.float32)
+            self.q_target[:7] = left_values[:7]
         self.tauff_target = np.zeros(14)
         self.motion_mode = motion_mode
         self.simulation_mode = simulation_mode

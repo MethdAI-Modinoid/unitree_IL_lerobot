@@ -338,6 +338,8 @@ def json_to_lerobot(
         raw_dir,
         robot_type=robot_type,
     )
+    
+    dataset.finalize()
 
     if push_to_hub:
         dataset.push_to_hub(upload_large_folder=True)

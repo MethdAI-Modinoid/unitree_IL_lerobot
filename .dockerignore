@@ -1,0 +1,53 @@
+# Caches
+__pycache__/
+*.pyc
+*.pyo
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Build artifacts
+*.egg-info/
+build/
+dist/
+
+# Large data — mounted as volumes at runtime
+lerobot_data/
+open_loop_eval_results/
+datasets/
+experiment_logs/
+outputs_pi/
+
+# Training outputs — mounted as volumes at runtime
+unitree_lerobot/lerobot/outputs_*/
+unitree_lerobot/lerobot/wandb/
+unitree_lerobot/lerobot/lerobot_data/
+
+# Non-essential lerobot subfolders (not needed for pip install -e or training)
+unitree_lerobot/lerobot/tests/
+unitree_lerobot/lerobot/media/
+unitree_lerobot/lerobot/docs/
+unitree_lerobot/lerobot/examples/
+unitree_lerobot/lerobot/benchmarks/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker (avoid recursive copy)
+Dockerfile
+build.sh
+docker_run.sh
+.dockerignore

@@ -73,23 +73,31 @@ def setup_image_client(args: argparse.Namespace) -> dict[str, Any]:
     # image client: img_config should be the same as the configuration in image_server.py (of Robot's development computing unit)
     if getattr(args, "sim", False):
         img_config = {
-            "fps": 30,
-            "head_camera_type": "opencv",
-            "head_camera_image_shape": [480, 640],  # Head camera resolution
-            "head_camera_id_numbers": [0],
-            "wrist_camera_type": "opencv",
-            "wrist_camera_image_shape": [480, 640],  # Wrist camera resolution
-            "wrist_camera_id_numbers": [2, 4],
+        'fps': 30,
+        
+        # ---- HEAD CAMERA (RealSense) ----
+        'head_camera_type': 'realsense',
+        'head_camera_image_shape': [480, 640],
+        'head_camera_id_numbers': ['344522071502'],  # Your RealSense serial number
+        
+        # ---- WRIST CAMERAS (2 USB webcams) ----
+        'wrist_camera_type': 'opencv',
+        'wrist_camera_image_shape': [480, 640],
+        'wrist_camera_id_numbers': ["/dev/video4", "/dev/video6"],  # /dev/video0 and /dev/video2
         }
     else:
         img_config = {
-            "fps": 30,
-            "head_camera_type": "opencv",
-            "head_camera_image_shape": [480, 1280],  # Head camera resolution
-            "head_camera_id_numbers": [0],
-            "wrist_camera_type": "opencv",
-            "wrist_camera_image_shape": [480, 640],  # Wrist camera resolution
-            "wrist_camera_id_numbers": [2, 4],
+        'fps': 30,
+        
+        # ---- HEAD CAMERA (RealSense) ----
+        'head_camera_type': 'realsense',
+        'head_camera_image_shape': [480, 640],
+        'head_camera_id_numbers': ['344522071502'],  # Your RealSense serial number
+        
+        # ---- WRIST CAMERAS (2 USB webcams) ----
+        'wrist_camera_type': 'opencv',
+        'wrist_camera_image_shape': [480, 640],
+        'wrist_camera_id_numbers': ["/dev/video4", "/dev/video6"],  # /dev/video0 and /dev/video2
         }
 
     ASPECT_RATIO_THRESHOLD = 2.0  # If the aspect ratio exceeds this value, it is considered binocular
@@ -113,6 +121,9 @@ def setup_image_client(args: argparse.Namespace) -> dict[str, Any]:
 
     tv_img_shm = shared_memory.SharedMemory(create=True, size=np.prod(tv_img_shape) * np.uint8().itemsize)
     tv_img_array = np.ndarray(tv_img_shape, dtype=np.uint8, buffer=tv_img_shm.buf)
+    wrist_img_shape = None
+    wrist_img_array = None
+    wrist_img_shm = None
 
     if WRIST and getattr(args, "sim", False):
         wrist_img_shape = (img_config["wrist_camera_image_shape"][0], img_config["wrist_camera_image_shape"][1] * 2, 3)
@@ -151,7 +162,7 @@ def setup_image_client(args: argparse.Namespace) -> dict[str, Any]:
         "wrist_img_shape": wrist_img_shape,
         "is_binocular": BINOCULAR,
         "has_wrist_cam": has_wrist_cam,
-        "shm_resources": [tv_img_shm, wrist_img_shm],
+        "shm_resources": [tv_img_shm, wrist_img_shm] if WRIST else [tv_img_shm],
     }
 
 
@@ -167,7 +178,14 @@ def setup_robot_interface(args: argparse.Namespace) -> dict[str, Any]:
     arm_spec = ARM_CONFIG[args.arm]
     arm_ik = arm_spec["ik_solver"]()
     is_sim = getattr(args, "sim", False)
-    arm_ctrl = arm_spec["controller"](motion_mode=args.motion, simulation_mode=is_sim)
+    if args.arm == "G1_29":
+        arm_ctrl = arm_spec["controller"](
+            motion_mode=args.motion,
+            simulation_mode=is_sim,
+            single=getattr(args, "single", False),
+        )
+    else:
+        arm_ctrl = arm_spec["controller"](motion_mode=args.motion, simulation_mode=is_sim)
 
     # ---------- End Effector (optional) ----------
     ee_ctrl, ee_shared_mem, ee_dof = None, {}, 0
@@ -254,6 +272,10 @@ def process_images_and_observations(
         "observation.images.cam_left_wrist": torch.from_numpy(left_wrist_cam) if has_wrist_cam else None,
         "observation.images.cam_right_wrist": torch.from_numpy(right_wrist_cam) if has_wrist_cam else None,
     }
+
+    # # convert image from bgr to rgb 
+    # observation = {k: (v[..., ::-1] if v is not None else None) for k, v in observation.items()}
+
     current_arm_q = arm_ctrl.get_current_dual_arm_q()
 
     return observation, current_arm_q
