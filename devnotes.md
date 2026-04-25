@@ -30,14 +30,14 @@ huggingface-cli upload deepansh-methdai/apple_box /mnt/drive2/.cache/huggingface
 # Single arm modes use the RIGHT arm only
 
 # Dual arm with gripper (28D -> 16D)
-python -s convert_hands_to_gripper.py \
+python -s unitree_lerobot/utils/convert_hands_to_gripper.py \
     --repo-id deepansh-methdai/three_camera \
     --output-repo-id deepansh-methdai/three_camera_gripper \
     --dof-mode dual_gripper \
     --root ./lerobot_data/deepansh-methdai/three_camera
 
 # Single arm with gripper (28D -> 8D), remove wrist cameras
-python -s convert_hands_to_gripper.py \
+python -s unitree_lerobot/utils/convert_hands_to_gripper.py \
     --repo-id deepansh-methdai/three_camera \
     --output-repo-id deepansh-methdai/single_arm_dual_cam \
     --dof-mode single_gripper \
@@ -46,14 +46,14 @@ python -s convert_hands_to_gripper.py \
     --push-to-hub
 
 # Single arm full hand (28D -> 14D)
-python -s convert_hands_to_gripper.py \
+python -s unitree_lerobot/utils/convert_hands_to_gripper.py \
     --repo-id deepansh-methdai/three_camera \
     --output-repo-id deepansh-methdai/three_camera_single_full \
     --dof-mode single_full \
     --root ./lerobot_data/deepansh-methdai/three_camera
 
 # Dry run to preview conversion
-python -s convert_hands_to_gripper.py \
+python -s unitree_lerobot/utils/convert_hands_to_gripper.py \
     --repo-id deepansh-methdai/three_camera \
     --output-repo-id deepansh-methdai/test_output \
     --dof-mode dual_gripper \
@@ -291,17 +291,17 @@ Use the -s flag when running python scripts
 # Dataset conversion from hands to gripper
 
 ```py
-python -s convert_hands_to_gripper.py --repo-id deepansh-methdai/three_camera --root ./lerobot_data/deepansh-methdai/three_camera --push-to-hub
+python -s unitree_lerobot/utils/convert_hands_to_gripper.py --repo-id deepansh-methdai/three_camera --root ./lerobot_data/deepansh-methdai/three_camera --push-to-hub
 ```
 
 # Dry run mode (verify without modifying):
 ```py
-python -s convert_hands_to_gripper.py --repo-id deepansh-methdai/three_camera --root ./lerobot_data/deepansh-methdai/three_camera --dry-run
+python -s unitree_lerobot/utils/convert_hands_to_gripper.py --repo-id deepansh-methdai/three_camera --root ./lerobot_data/deepansh-methdai/three_camera --dry-run
 ```
 
 # Custom output directory:
 ```py
-python -s convert_hands_to_gripper.py --repo-id deepansh-methdai/three_camera --root ./lerobot_data/deepansh-methdai/three_camera --output-dir ./lerobot_data/deepansh-methdai/three_camera_gripper
+python -s unitree_lerobot/utils/convert_hands_to_gripper.py --repo-id deepansh-methdai/three_camera --root ./lerobot_data/deepansh-methdai/three_camera --output-dir ./lerobot_data/deepansh-methdai/three_camera_gripper
 ```
 
 

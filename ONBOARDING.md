@@ -249,7 +249,7 @@ Raw G1+Dex3 data is 28D. We convert to 8D single-gripper for our primary experim
 
 ```bash
 # Always dry-run first to verify feature shapes
-python -s convert_hands_to_gripper.py \
+python -s unitree_lerobot/utils/convert_hands_to_gripper.py \
     --repo-id deepansh-methdai/task_name \
     --output-repo-id deepansh-methdai/task_name_test \
     --dof-mode single_gripper \
@@ -257,7 +257,7 @@ python -s convert_hands_to_gripper.py \
     --dry-run
 
 # Then run for real
-python -s convert_hands_to_gripper.py \
+python -s unitree_lerobot/utils/convert_hands_to_gripper.py \
     --repo-id deepansh-methdai/task_name \
     --output-repo-id deepansh-methdai/task_name_single_gripper \
     --dof-mode single_gripper \
