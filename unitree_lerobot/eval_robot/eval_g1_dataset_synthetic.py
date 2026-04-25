@@ -47,10 +47,14 @@ from unitree_lerobot.eval_robot.utils.utils import (
     to_list,
     to_scalar,
     EvalRealConfig,
+    compute_metrics,
+    print_metrics_table,
+    save_metrics_json,
 )
 from unitree_lerobot.eval_robot.utils.rerun_visualizer import RerunLogger, visualization_data
 from unitree_lerobot.eval_robot.utils.gripper_converter import GripperConverter, detect_dataset_mode
 
+import os
 
 import logging_mp
 
@@ -83,9 +87,7 @@ def extract_observation_synthetic(step: dict, frame_mode: str) -> dict:
 
     for key, value in step.items():
         if key.startswith("observation.images."):
-            # value is already a (C, H, W) tensor from the LeRobotDataset
             observation[key] = _make_synthetic_image(value, frame_mode)
-
         elif key == "observation.state":
             observation[key] = value
 
@@ -112,25 +114,26 @@ def eval_policy(
     if cfg.visualization:
         rerun_logger = RerunLogger()
 
-    # Reset policy and processor if they are provided
-    if policy is not None and preprocessor is not None and postprocessor is not None:
-        policy.reset()
-        preprocessor.reset()
-        postprocessor.reset()
-
-    # init pose
-    from_idx = dataset.meta.episodes["dataset_from_index"][0]
-    step = dataset[from_idx]
-    to_idx = dataset.meta.episodes["dataset_to_index"][0]
-
-    ground_truth_actions = []
-    predicted_actions = []
-
     # --- Setup Gripper Converter ---
     dataset_info = detect_dataset_mode(dataset.meta)
     gripper_converter = GripperConverter(ee_type=cfg.ee) if cfg.ee else None
     is_single_arm = dataset_info["arm_type"] == "single"
     logger_mp.info(f"Dataset mode: {dataset_info['mode']} ({dataset_info['state_dim']}D), arm_type: {dataset_info['arm_type']}")
+
+    # Determine how many episodes to evaluate
+    total_episodes = dataset.num_episodes
+    n_episodes = cfg.episodes if cfg.episodes > 0 else total_episodes
+    n_episodes = min(n_episodes, total_episodes)
+    logger_mp.info(f"Evaluating {n_episodes} / {total_episodes} episodes  (frame_mode={frame_mode})")
+
+    # Get joint names once
+    first_step = dataset[dataset.meta.episodes["dataset_from_index"][0]]
+    n_dims = first_step["action"].shape[0]
+    action_names = (
+        dataset.meta.features["action"]["names"][0]
+        if "names" in dataset.meta.features["action"]
+        else [f"Dim_{i}" for i in range(n_dims)]
+    )
 
     if cfg.send_real_robot:
         from unitree_lerobot.eval_robot.make_robot import setup_robot_interface
@@ -141,27 +144,44 @@ def eval_policy(
         )
 
         if is_single_arm:
-            right_arm_init = step["observation.state"][:7].cpu().numpy()
+            right_arm_init = first_step["observation.state"][:7].cpu().numpy()
             left_arm_init = np.zeros(7, dtype=np.float32)
             init_arm_pose = np.concatenate([left_arm_init, right_arm_init])
         else:
-            init_arm_pose = step["observation.state"][:arm_dof].cpu().numpy()
+            init_arm_pose = first_step["observation.state"][:arm_dof].cpu().numpy()
 
     # ===============init robot=====================
-    user_input = input("Please enter the start signal (enter 's' to start the subsequent program):")
-    if user_input.lower() == "s":
-        if cfg.send_real_robot:
-            logger_mp.info("Initializing robot to starting pose...")
-            tau = robot_interface["arm_ik"].solve_tau(init_arm_pose)
-            robot_interface["arm_ctrl"].ctrl_dual_arm(init_arm_pose, tau)
-            time.sleep(1)
+    if cfg.send_real_robot:
+        user_input = input("Please enter the start signal (enter 's' to start the subsequent program):")
+        if user_input.lower() != "s":
+            return None
+        logger_mp.info("Initializing robot to starting pose...")
+        tau = robot_interface["arm_ik"].solve_tau(init_arm_pose)
+        robot_interface["arm_ctrl"].ctrl_dual_arm(init_arm_pose, tau)
+        time.sleep(1)
 
-        for step_idx in tqdm.tqdm(range(from_idx, to_idx)):
+    all_episode_gt = []
+    all_episode_pred = []
+
+    for ep_idx in range(n_episodes):
+        policy.reset()
+        if preprocessor is not None:
+            preprocessor.reset()
+        if postprocessor is not None:
+            postprocessor.reset()
+
+        from_idx = dataset.meta.episodes["dataset_from_index"][ep_idx]
+        to_idx = dataset.meta.episodes["dataset_to_index"][ep_idx]
+
+        ground_truth_actions = []
+        predicted_actions = []
+
+        logger_mp.info(f"Episode {ep_idx + 1}/{n_episodes}  steps [{from_idx}, {to_idx})")
+
+        for step_idx in tqdm.tqdm(range(from_idx, to_idx), desc=f"Episode {ep_idx + 1}"):
             loop_start_time = time.perf_counter()
 
             step = dataset[step_idx]
-
-            # --- KEY DIFFERENCE: use synthetic frames instead of dataset images ---
             observation = extract_observation_synthetic(step, frame_mode)
 
             action = predict_action(
@@ -176,8 +196,6 @@ def eval_policy(
                 robot_type=None,
             )
             action_np = action.cpu().numpy()
-            print(f"Predicted Action Shape: {action_np.shape}")
-            print(f"Predicted Action: {action_np}")
 
             ground_truth_actions.append(step["action"].numpy())
             predicted_actions.append(action_np)
@@ -215,33 +233,63 @@ def eval_policy(
             if cfg.visualization:
                 visualization_data(step_idx, observation, observation["observation.state"], action_np, rerun_logger)
 
-            # Maintain frequency
             time.sleep(max(0, (1.0 / cfg.frequency) - (time.perf_counter() - loop_start_time)))
 
-        ground_truth_actions = np.array(ground_truth_actions)
-        predicted_actions = np.array(predicted_actions)
+        all_episode_gt.append(np.array(ground_truth_actions))
+        all_episode_pred.append(np.array(predicted_actions))
 
-        n_timesteps, n_dims = ground_truth_actions.shape
+    # ── Aggregate across all episodes ─────────────────────────────────────────
+    all_gt = np.concatenate(all_episode_gt, axis=0)
+    all_pred = np.concatenate(all_episode_pred, axis=0)
+    n_timesteps = all_gt.shape[0]
 
-        action_names = dataset.meta.features["action"]["names"][0] if "names" in dataset.meta.features["action"] else [f"Dim {i + 1}" for i in range(n_dims)]
+    metrics = compute_metrics(all_gt, all_pred, action_names)
+    print_metrics_table(metrics)
 
-        fig, axes = plt.subplots(n_dims, 1, figsize=(12, 4 * n_dims), sharex=True)
-        fig.suptitle(f"Ground Truth vs Predicted Actions  (frame_mode={frame_mode})")
+    # Auto-name output JSON to distinguish from real-image runs
+    out_path = cfg.output_path
+    if not out_path:
+        import os as _os
+        ckpt = getattr(getattr(cfg, "policy", None), "pretrained_path", "unknown")
+        ckpt_name = _os.path.basename(ckpt.rstrip("/")) if ckpt != "unknown" else "unknown"
+        out_path = f"eval_results_{ckpt_name}_synthetic_{frame_mode}.json"
 
-        for i in range(n_dims):
-            ax = axes[i] if n_dims > 1 else axes
-            ax.plot(ground_truth_actions[:, i], label="Ground Truth", color="blue")
-            ax.plot(predicted_actions[:, i], label="Predicted", color="red", linestyle="--")
-            ax.set_ylabel(action_names[i])
-            ax.legend()
+    save_metrics_json(metrics, cfg, n_episodes=n_episodes, n_timesteps=n_timesteps,
+                      output_path=out_path)
 
+    # ── Plot ───────────────────────────────────────────────────────────────────
+    gt_plot = all_episode_gt[-1]
+    pred_plot = all_episode_pred[-1]
+    n_dims = gt_plot.shape[1]
+
+    fig, axes = plt.subplots(n_dims, 1, figsize=(12, 4 * n_dims), sharex=True)
+    fig.suptitle(
+        f"Ground Truth vs Predicted Actions  "
+        f"(frame_mode={frame_mode}, ep {n_episodes}, overall RMSE={metrics['rmse_overall']:.4f})"
+    )
+
+    for i in range(n_dims):
+        ax = axes[i] if n_dims > 1 else axes
+        ax.plot(gt_plot[:, i], label="Ground Truth", color="blue")
+        ax.plot(pred_plot[:, i], label="Predicted", color="red", linestyle="--")
+        ax.set_title(
+            f"{action_names[i]}  (RMSE={metrics['rmse_per_joint'][i]:.4f}  "
+            f"MAE={metrics['mae_per_joint'][i]:.4f})",
+            fontsize=9,
+        )
+        ax.legend(fontsize=7)
+
+    if n_dims > 1:
         axes[-1].set_xlabel("Timestep")
+    else:
+        axes.set_xlabel("Timestep")
 
-        plt.tight_layout()
+    plt.tight_layout()
+    fig_path = f"figure_synthetic_{frame_mode}.png"
+    plt.savefig(fig_path)
+    logger_mp.info(f"Saved plot to {fig_path}")
 
-        time.sleep(1)
-        plt.savefig(f"figure_synthetic_{frame_mode}.png")
-        logger_mp.info(f"Saved plot to figure_synthetic_{frame_mode}.png")
+    return metrics
 
 
 # ---------------------------------------------------------------------------
@@ -259,11 +307,9 @@ def _pop_frame_mode_arg() -> str:
         if arg.startswith("--frame_mode="):
             mode = arg.split("=", 1)[1]
         elif arg == "--frame_mode":
-            # next arg is the value — handled below
             pass
         else:
             new_argv.append(arg)
-    # Handle the case where --frame_mode <value> (space-separated)
     for i, arg in enumerate(sys.argv):
         if arg == "--frame_mode" and i + 1 < len(sys.argv):
             mode = sys.argv[i + 1]

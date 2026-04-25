@@ -94,7 +94,7 @@ echo "=============================================="
 #     "${IMAGE_NAME}:${IMAGE_TAG}" \
 #     "$@"
 
-wandb docker-run -it \
+docker run -it \
     --name "${CONTAINER_NAME}" \
     --gpus all \
     --runtime=nvidia \

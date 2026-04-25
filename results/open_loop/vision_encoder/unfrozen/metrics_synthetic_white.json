@@ -1,0 +1,51 @@
+{
+  "checkpoint": "./outputs_pi/pi05_unfrozen_vision_20k/020000/pretrained_model",
+  "dataset": "deepansh-methdai/single_arm_dual_cam",
+  "n_episodes": 10,
+  "n_timesteps": 6619,
+  "metrics": {
+    "action_names": [
+      "kRightShoulderPitch",
+      "kRightShoulderRoll",
+      "kRightShoulderYaw",
+      "kRightElbow",
+      "kRightWristRoll",
+      "kRightWristPitch",
+      "kRightWristYaw",
+      "kRightGripper"
+    ],
+    "mae_per_joint": [
+      0.11170181632041931,
+      0.04630381613969803,
+      0.0802401751279831,
+      0.1546461433172226,
+      0.09383760392665863,
+      0.1120251715183258,
+      0.08293069899082184,
+      0.15411673486232758
+    ],
+    "mse_per_joint": [
+      0.028213517740368843,
+      0.004593986086547375,
+      0.012408474460244179,
+      0.05121060460805893,
+      0.01754714362323284,
+      0.023676499724388123,
+      0.013596114702522755,
+      0.05476659908890724
+    ],
+    "rmse_per_joint": [
+      0.16796879990155567,
+      0.067778950172951,
+      0.11139333220729228,
+      0.22629760186104256,
+      0.13246563185684368,
+      0.15387169890655047,
+      0.116602378631496,
+      0.2340226465300041
+    ],
+    "mae_overall": 0.10447527002543211,
+    "mse_overall": 0.025751617504283786,
+    "rmse_overall": 0.16047310523662145
+  }
+}

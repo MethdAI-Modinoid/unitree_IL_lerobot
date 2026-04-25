@@ -81,6 +81,11 @@
 #     --send_real_robot=true \
 #     # --policy.n_action_steps=30 \
 
+export LEROBOT_REPO_DIR=/workspace/unitree_lerobot/lerobot
+export HF_LEROBOT_HOME=/workspace/lerobot_data
+# export LEROBOT_REPO_DIR=./unitree_lerobot/lerobot
+# export HF_LEROBOT_HOME=./lerobot_data
+
 # ## OPEN LOOP EVAL
 # python -s unitree_lerobot/eval_robot/eval_g1_dataset_synthetic.py  \
 #     --policy.path=outputs_pi/best_config/checkpoints/models--deepansh-methdai--pi05_single_arm_dual_cam_20k/snapshots/b89d7a7dc6b2d5d5955f020e95d5c8f6743c939e/020000/pretrained_model \
@@ -102,11 +107,6 @@
 #     --arm="G1_29" --ee="dex3" \
 #     --visualization=false --send_real_robot=false \
 #     --frame_mode=white
-
-# export LEROBOT_REPO_DIR=/workspace/unitree_lerobot/lerobot
-# export HF_LEROBOT_HOME=/workspace/lerobot_data
-export LEROBOT_REPO_DIR=./unitree_lerobot/lerobot
-export HF_LEROBOT_HOME=./lerobot_data
 
 # cd ${LEROBOT_REPO_DIR} && \
 # rm -rf ./outputs_pi05_unfrozen_vision_20k_temp && \

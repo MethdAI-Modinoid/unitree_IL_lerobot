@@ -36,6 +36,9 @@ from unitree_lerobot.eval_robot.utils.utils import (
     to_list,
     to_scalar,
     EvalRealConfig,
+    compute_metrics,
+    print_metrics_table,
+    save_metrics_json,
 )
 from unitree_lerobot.eval_robot.utils.rerun_visualizer import RerunLogger, visualization_data
 from unitree_lerobot.eval_robot.utils.gripper_converter import GripperConverter, detect_dataset_mode
@@ -61,26 +64,26 @@ def eval_policy(
     if cfg.visualization:
         rerun_logger = RerunLogger()
 
-    # Reset policy and processor if they are provided
-    if policy is not None and preprocessor is not None and postprocessor is not None:
-        policy.reset()
-        preprocessor.reset()
-        postprocessor.reset()
-
-    # init pose  dataset.meta.episodes["dataset_from_index"][episode_index]
-    from_idx = dataset.meta.episodes["dataset_from_index"][0]
-    step = dataset[from_idx]
-    to_idx = dataset.meta.episodes["dataset_to_index"][0]
-
-    ground_truth_actions = []
-    predicted_actions = []
-
     # --- Setup Gripper Converter ---
-    # Detect if dataset uses gripper (16D/8D) or full hand (28D/14D) representation
     dataset_info = detect_dataset_mode(dataset.meta)
     gripper_converter = GripperConverter(ee_type=cfg.ee) if cfg.ee else None
     is_single_arm = dataset_info["arm_type"] == "single"
     logger_mp.info(f"Dataset mode: {dataset_info['mode']} ({dataset_info['state_dim']}D), arm_type: {dataset_info['arm_type']}")
+
+    # Determine how many episodes to evaluate
+    total_episodes = dataset.num_episodes
+    n_episodes = cfg.episodes if cfg.episodes > 0 else total_episodes
+    n_episodes = min(n_episodes, total_episodes)
+    logger_mp.info(f"Evaluating {n_episodes} / {total_episodes} episodes")
+
+    # Get joint names once (same for all episodes)
+    first_step = dataset[dataset.meta.episodes["dataset_from_index"][0]]
+    n_dims = first_step["action"].shape[0]
+    action_names = (
+        dataset.meta.features["action"]["names"][0]
+        if "names" in dataset.meta.features["action"]
+        else [f"Dim_{i}" for i in range(n_dims)]
+    )
 
     if cfg.send_real_robot:
         from unitree_lerobot.eval_robot.make_robot import setup_robot_interface
@@ -89,28 +92,43 @@ def eval_policy(
         arm_ctrl, arm_ik, ee_shared_mem, arm_dof, ee_dof = (
             robot_interface[key] for key in ["arm_ctrl", "arm_ik", "ee_shared_mem", "arm_dof", "ee_dof"]
         )
-        
-        # For single arm, dataset has 7 arm joints (right arm only)
-        # But IK expects 14D, so we need to pad with zeros for left arm
+
         if is_single_arm:
-            right_arm_init = step["observation.state"][:7].cpu().numpy()
-            left_arm_init = np.zeros(7, dtype=np.float32)  # Default pose for left arm
+            right_arm_init = first_step["observation.state"][:7].cpu().numpy()
+            left_arm_init = np.zeros(7, dtype=np.float32)
             init_arm_pose = np.concatenate([left_arm_init, right_arm_init])
         else:
-            init_arm_pose = step["observation.state"][:arm_dof].cpu().numpy()
+            init_arm_pose = first_step["observation.state"][:arm_dof].cpu().numpy()
 
     # ===============init robot=====================
-    user_input = input("Please enter the start signal (enter 's' to start the subsequent program):")
-    if user_input.lower() == "s":
-        if cfg.send_real_robot:
-            # Initialize robot to starting pose
-            logger_mp.info("Initializing robot to starting pose...")
-            tau = robot_interface["arm_ik"].solve_tau(init_arm_pose)
-            robot_interface["arm_ctrl"].ctrl_dual_arm(init_arm_pose, tau)
+    if cfg.send_real_robot:
+        user_input = input("Please enter the start signal (enter 's' to start the subsequent program):")
+        if user_input.lower() != "s":
+            return None
+        logger_mp.info("Initializing robot to starting pose...")
+        tau = robot_interface["arm_ik"].solve_tau(init_arm_pose)
+        robot_interface["arm_ctrl"].ctrl_dual_arm(init_arm_pose, tau)
+        time.sleep(1)
 
-            time.sleep(1)
+    all_episode_gt = []
+    all_episode_pred = []
 
-        for step_idx in tqdm.tqdm(range(from_idx, to_idx)):
+    for ep_idx in range(n_episodes):
+        policy.reset()
+        if preprocessor is not None:
+            preprocessor.reset()
+        if postprocessor is not None:
+            postprocessor.reset()
+
+        from_idx = dataset.meta.episodes["dataset_from_index"][ep_idx]
+        to_idx = dataset.meta.episodes["dataset_to_index"][ep_idx]
+
+        ground_truth_actions = []
+        predicted_actions = []
+
+        logger_mp.info(f"Episode {ep_idx + 1}/{n_episodes}  steps [{from_idx}, {to_idx})")
+
+        for step_idx in tqdm.tqdm(range(from_idx, to_idx), desc=f"Episode {ep_idx + 1}"):
             loop_start_time = time.perf_counter()
 
             step = dataset[step_idx]
@@ -128,48 +146,33 @@ def eval_policy(
                 robot_type=None,
             )
             action_np = action.cpu().numpy()
-            # print shape
-            print(f"Predicted Action Shape: {action_np.shape}")
-            print(f"Predicted Action: {action_np}")
 
             ground_truth_actions.append(step["action"].numpy())
             predicted_actions.append(action_np)
 
             if cfg.send_real_robot:
-                # Execute Action
-                # For single arm, pad left arm with zeros to get 14D for IK
                 if is_single_arm:
                     right_arm_action = action_np[:7]
                     left_arm_action = np.zeros(7, dtype=np.float32)
                     arm_action = np.concatenate([left_arm_action, right_arm_action])
                 else:
                     arm_action = action_np[:arm_dof]
-                    
+
                 tau = arm_ik.solve_tau(arm_action)
                 arm_ctrl.ctrl_dual_arm(arm_action, tau)
-                # logger_mp.info(f"Arm Action: {arm_action}")
 
                 if cfg.ee and gripper_converter:
-                    # Use gripper converter to handle gripper/full and single/dual arm
-                    # For single arm, use arm_dof=7 so converter correctly detects 8D action
                     converter_arm_dof = 7 if is_single_arm else arm_dof
                     ee_actions = gripper_converter.get_ee_actions(action_np, converter_arm_dof)
-                    
+
                     if is_single_arm:
-                        # Single arm: only one end-effector (right arm/hand)
                         ee_action = ee_actions[0]
-                        # logger_mp.info(f"EE Action: {ee_action}")
-                        
-                        # For single arm, the EE goes to the RIGHT hand
                         if isinstance(ee_shared_mem["right"], SynchronizedArray):
                             ee_shared_mem["right"][:] = to_list(ee_action)
                         elif hasattr(ee_shared_mem["right"], "value"):
                             ee_shared_mem["right"].value = to_scalar(ee_action)
                     else:
-                        # Dual arm: two end-effectors
                         left_ee_action, right_ee_action = ee_actions
-                        # logger_mp.info(f"EE Action: left {left_ee_action}, right {right_ee_action}")
-
                         if isinstance(ee_shared_mem["left"], SynchronizedArray):
                             ee_shared_mem["left"][:] = to_list(left_ee_action)
                             ee_shared_mem["right"][:] = to_list(right_ee_action)
@@ -180,39 +183,53 @@ def eval_policy(
             if cfg.visualization:
                 visualization_data(step_idx, observation, observation["observation.state"], action_np, rerun_logger)
 
-            # Maintain frequency
             time.sleep(max(0, (1.0 / cfg.frequency) - (time.perf_counter() - loop_start_time)))
 
-        ground_truth_actions = np.array(ground_truth_actions)
-        predicted_actions = np.array(predicted_actions)
+        all_episode_gt.append(np.array(ground_truth_actions))
+        all_episode_pred.append(np.array(predicted_actions))
 
-        # Get the number of timesteps and action dimensions
-        n_timesteps, n_dims = ground_truth_actions.shape
+    # ── Aggregate across all episodes ─────────────────────────────────────────
+    all_gt = np.concatenate(all_episode_gt, axis=0)    # (total_T, D)
+    all_pred = np.concatenate(all_episode_pred, axis=0)
+    n_timesteps = all_gt.shape[0]
 
-        # Get joint names from dataset metadata
-        action_names = dataset.meta.features["action"]["names"][0] if "names" in dataset.meta.features["action"] else [f"Dim {i + 1}" for i in range(n_dims)]
+    metrics = compute_metrics(all_gt, all_pred, action_names)
+    print_metrics_table(metrics)
+    save_metrics_json(metrics, cfg, n_episodes=n_episodes, n_timesteps=n_timesteps,
+                      output_path=cfg.output_path)
 
-        # Create a figure with subplots for each action dimension
-        fig, axes = plt.subplots(n_dims, 1, figsize=(12, 4 * n_dims), sharex=True)
-        fig.suptitle("Ground Truth vs Predicted Actions")
+    # ── Plot (one figure using the last episode for the trace, with RMSE in titles) ─
+    gt_plot = all_episode_gt[-1]
+    pred_plot = all_episode_pred[-1]
+    n_plot_steps, n_dims = gt_plot.shape
 
-        # Plot each dimension
-        for i in range(n_dims):
-            ax = axes[i] if n_dims > 1 else axes
+    fig, axes = plt.subplots(n_dims, 1, figsize=(12, 4 * n_dims), sharex=True)
+    fig.suptitle(
+        f"Ground Truth vs Predicted Actions  "
+        f"(ep {n_episodes}, overall RMSE={metrics['rmse_overall']:.4f})"
+    )
 
-            ax.plot(ground_truth_actions[:, i], label="Ground Truth", color="blue")
-            ax.plot(predicted_actions[:, i], label="Predicted", color="red", linestyle="--")
-            ax.set_ylabel(action_names[i])
-            ax.legend()
+    for i in range(n_dims):
+        ax = axes[i] if n_dims > 1 else axes
+        ax.plot(gt_plot[:, i], label="Ground Truth", color="blue")
+        ax.plot(pred_plot[:, i], label="Predicted", color="red", linestyle="--")
+        ax.set_title(
+            f"{action_names[i]}  (RMSE={metrics['rmse_per_joint'][i]:.4f}  "
+            f"MAE={metrics['mae_per_joint'][i]:.4f})",
+            fontsize=9,
+        )
+        ax.legend(fontsize=7)
 
-        # Set common x-label
+    if n_dims > 1:
         axes[-1].set_xlabel("Timestep")
+    else:
+        axes.set_xlabel("Timestep")
 
-        plt.tight_layout()
-        # plt.show()
+    plt.tight_layout()
+    plt.savefig("figure.png")
+    logger_mp.info("Action trace plot saved to figure.png")
 
-        time.sleep(1)
-        plt.savefig("figure.png")
+    return metrics
 
 
 @parser.wrap()

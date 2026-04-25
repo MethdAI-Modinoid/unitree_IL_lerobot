@@ -68,7 +68,9 @@ RUN update-alternatives --install /usr/bin/python  python  /usr/bin/python3.10 1
     && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
 
 # ---- Install pip & uv ----
-RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10 \
+    && update-alternatives --install /usr/bin/pip pip /usr/local/bin/pip3 1 \
+    && update-alternatives --install /usr/bin/pip3 pip3 /usr/local/bin/pip3 1
 
 ENV PIP_DEFAULT_TIMEOUT=300
 

@@ -1,0 +1,87 @@
+# ==============================================================================
+# Open-Loop Evaluation Suite Configuration
+# ==============================================================================
+# Fill in the checkpoint paths below, then run:
+#
+  # python -s unitree_lerobot/eval_robot/run_open_loop_suite.py \
+  #     --config=research/eval_suite.yaml
+#
+# To run only one ablation group:
+#   python -s unitree_lerobot/eval_robot/run_open_loop_suite.py \
+#       --config=research/eval_suite.yaml --only=training_steps
+#
+# Checkpoints still set to the placeholder "/path/to/..." are SKIPPED with a
+# warning, so you can run a partial suite as checkpoints become available.
+# ==============================================================================
+
+# ── Shared eval settings (applied to every run) ────────────────────────────
+repo_id: deepansh-methdai/single_arm_dual_cam
+episodes: 10          # episodes per checkpoint  (0 = all episodes in dataset)
+frequency: 30
+arm: G1_29
+ee: dex3
+output_dir: results/open_loop   # relative to project root
+
+# Extra frame-modes to evaluate per checkpoint, reusing the already-loaded
+# policy (no extra GPU load). Produces metrics_synthetic_<mode>.json +
+# figure_synthetic_<mode>.png alongside each run's real-image outputs.
+# Also adds a 3rd "vision robustness" panel to comparison.png.
+# Options: [white, black, random]  |  [] to disable
+synthetic_frame_modes: [white]
+
+# ── Ablation groups ────────────────────────────────────────────────────────
+# Each group becomes one sub-folder under output_dir.
+# Each run within a group produces:
+#   <output_dir>/<group>/<label>/metrics.json
+#   <output_dir>/<group>/<label>/figure.png
+# After all runs in a group finish, a combined comparison plot is saved to:
+#   <output_dir>/<group>/comparison.png
+
+ablations:
+
+  # --------------------------------------------------------------------------
+  # Primary checkpoint  (best — 20k steps, full fine-tune)
+  # --------------------------------------------------------------------------
+  primary:
+    runs:
+      - label: 20k
+        checkpoint: ./outputs_pi/pi05_primary_30k/020000/pretrained_model
+
+  # --------------------------------------------------------------------------
+  # Ablation B — Training Steps
+  # Research question RQ4: How do training steps correlate with open-loop accuracy?
+  # All checkpoints from the same primary training run for a fair comparison.
+  # --------------------------------------------------------------------------
+  training_steps:
+    runs:
+      - label: 10k
+        checkpoint: ./outputs_pi/pi05_primary_30k/010000/pretrained_model
+      - label: 20k
+        checkpoint: ./outputs_pi/pi05_primary_30k/020000/pretrained_model
+      - label: 30k
+        checkpoint: ./outputs_pi/pi05_primary_30k/030000/pretrained_model
+
+  # --------------------------------------------------------------------------
+  # Ablation A — Vision Encoder Freezing
+  # Research question RQ3: Frozen vs unfrozen vision encoder generalisation.
+  # Both evaluated at 20k steps for a fair step-matched comparison.
+  # Frozen = primary run (freeze_vision_encoder=true by default).
+  # --------------------------------------------------------------------------
+  vision_encoder:
+    runs:
+      - label: frozen
+        checkpoint: ./outputs_pi/pi05_primary_30k/020000/pretrained_model
+      - label: unfrozen
+        checkpoint: ./outputs_pi/pi05_unfrozen_vision_20k/020000/pretrained_model
+
+  # --------------------------------------------------------------------------
+  # Ablation C — Train Expert Only
+  # Compares full VLM fine-tune vs only training the expert action head.
+  # Both at 20k steps.
+  # --------------------------------------------------------------------------
+  expert_only:
+    runs:
+      - label: expert_only
+        checkpoint: ./outputs_pi/pi05_expert_only_20k/020000/pretrained_model
+      - label: full_finetune
+        checkpoint: ./outputs_pi/pi05_primary_30k/020000/pretrained_model

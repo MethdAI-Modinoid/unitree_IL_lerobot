@@ -321,3 +321,4 @@ python -s unitree_lerobot/eval_robot/eval_g1_dataset_synthetic.py \
     --arm="G1_29" --ee="dex3" \
     --visualization=false --send_real_robot=false \
     --frame_mode=random
+
